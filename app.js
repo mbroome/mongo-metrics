@@ -19,8 +19,12 @@ exports.handler = (event, context, callback) => {
 };
 
 /*
-function processEvent(event, context, callback) {
-    console.log('Calling MongoDB Atlas from AWS Lambda with event: ' + JSON.stringify(event));
+// finished doc in the collection
+{
+  'metric': 'bob',
+  'points': [
+     { 'timestamp': 'abc', 'value': 50.5}
+  ]
 }
 */
 
@@ -28,26 +32,14 @@ function processEvent(event, context, callback) {
     console.log('Calling MongoDB Atlas from AWS Lambda with event: ' + JSON.stringify(event));
     var jsonContents = JSON.parse(JSON.stringify(event));
     
-    //date conversion for grades array
-    if(jsonContents.grades != null) {
-        for(var i = 0, len=jsonContents.grades.length; i < len; i++) {
-            //use the following line if you want to preserve the original dates
-            //jsonContents.grades[i].date = new Date(jsonContents.grades[i].date);
-            
-            //the following line assigns the current date so we can more easily differentiate between similar records
-            jsonContents.grades[i].date = new Date();
-        }
-    }
-    
-    //the following line is critical for performance reasons to allow re-use of database connections across calls to this Lambda function and avoid closing the database connection. The first call to this lambda function takes about 5 seconds to complete, while subsequent, close calls will only take a few hundred milliseconds.
     context.callbackWaitsForEmptyEventLoop = false;
     
     try {
         if (cachedDb == null) {
             console.log('=> connecting to database');
             MongoClient.connect(atlas_connection_uri, { useNewUrlParser: true }, function (err, client) {
-console.log(err);
-console.log(client);
+//console.log(err);
+//console.log(client);
                 cachedDb = client.db('metrics');
                 return createDoc(cachedDb, jsonContents, callback);
             });
@@ -56,23 +48,26 @@ console.log(client);
             createDoc(cachedDb, jsonContents, callback);
         }
     }
-    catch (err) {
+    catch(err) {
         console.error('an error occurred', err);
     }
 }
 
-function createDoc (db, json, callback) {
-  db.collection('restaurants').insertOne( json, function(err, result) {
+function createDoc(db, doc, callback) {
+   //console.log(JSON.stringify(doc));
+   db.collection('metrics').updateOne(
+       { "metric": doc.metric },
+       { $push: { "points": { "timestamp": new Date(), "value": doc.value } } },
+       { upsert: true },
+    function(err, result) {
+      //console.log(result);
       if(err!=null) {
-          console.error("an error occurred in createDoc", err);
-          callback(null, JSON.stringify(err));
+         console.error("an error occurred in createDoc", err);
+         callback(null, JSON.stringify(err));
       }
       else {
-        console.log("Kudos! You just created an entry into the restaurants collection with id: " + result.insertedId);
-        callback(null, "SUCCESS");
+         callback(null, "SUCCESS");
       }
-      //we don't need to close the connection thanks to context.callbackWaitsForEmptyEventLoop = false (above)
-      //this will let our function re-use the connection on the next called (if it can re-use the same Lambda container)
-      //db.close();
-  });
+   });
 };
+
