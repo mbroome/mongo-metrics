@@ -1,5 +1,8 @@
+import os
+import logging
 import json
-import time
+import bson
+import datetime
 import base64
 
 from pymongo import MongoClient
@@ -13,25 +16,24 @@ client = MongoClient(os.environ['MONGODB_ATLAS_CLUSTER_URI'])
 # Set database
 db = client.metrics
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return json.JSONEncoder.default(self, o)
+
 def lambda_handler(event, context):
    logger.info("Received event: " + json.dumps(event, indent=2))
 
    collection = db.metrics
-   pointData = json.loads(event)
-   logger.info(json.dumps(pointData))
+   logger.info(json.dumps(event))
 
    response = collection.update_one(
-                 { "metric": pointData['metric'] },
-                 { "$push": { "points": { "timestamp": time.time(), "value": pointData['value'] } } },
-                 { "upsert": True })
+                 { "metric": event['metric'] },
+                 { "$push": { "points": { "timestamp": datetime.datetime.utcnow(), "value": event['value'] } } },
+                 True)
 
-   return json.loads(json.dumps(response, default=json_unknown_type_handler))
-
-def json_unknown_type_handler(x):
-    """
-    JSON cannot serialize decimal, datetime and ObjectId. So we provide this handler.
-    """
-    if isinstance(x, bson.ObjectId):
-        return str(x)
-    raise TypeError("Unknown datetime type")
-
+   #return json.loads(json.dumps(response, cls=DateTimeEncoder))
+   return(True)
+      
