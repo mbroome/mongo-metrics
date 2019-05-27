@@ -29,7 +29,7 @@ def lambda_handler(event, context):
 
    response = collection.update_one(
                  { "metric": data['metric'] },
-                 { "$push": { "points": { "timestamp": datetime.datetime.utcnow(), "value": data['value'] } } },
+                 { "$push": { "points": { "$each": [{ "timestamp": datetime.datetime.utcnow(), "value": data['value'] }], "$slice": -864 } }  },
                  True)
 
    return(True)
